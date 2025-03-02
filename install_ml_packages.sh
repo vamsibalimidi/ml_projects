@@ -5,9 +5,23 @@ log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# Add validation function
+# Add environment check function
+check_env() {
+    conda env list | grep "^ml_env " >/dev/null 2>&1
+}
+
+# Add package check function
+check_package() {
+    conda list -n ml_env | grep "^$1 " >/dev/null 2>&1
+}
+
+# Modify validation function to be more robust
 validate_installation() {
     log "🔍 Validating installation..."
+    if ! check_env; then
+        log "❌ ML environment not found"
+        return 1
+    fi
     python3 -c "
 import numpy as np
 import torch
@@ -60,91 +74,141 @@ set -e
 
 log "🍎 Setting up ML environment for Apple Silicon Mac"
 
-# Install Miniforge if not present
+# Install and initialize Miniforge if not present
 if ! command -v conda &> /dev/null; then
     log "Installing Miniforge..."
     curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh -o miniforge.sh
     bash miniforge.sh -b -p "$HOME/miniforge3"
     rm miniforge.sh
-    source "$HOME/miniforge3/bin/activate"
-    conda init bash
+    
+    # Initialize conda for the current shell
+    eval "$("$HOME/miniforge3/bin/conda" "shell.bash" "hook")"
+else
+    log "✓ Miniforge already installed"
+fi
+
+# Ensure conda is properly initialized
+if ! grep -q "conda initialize" ~/.bash_profile ~/.zshrc 2>/dev/null; then
+    log "Initializing conda..."
+    conda init "$(basename "$SHELL")"
+    # Source the shell configuration
+    case "$SHELL" in
+        */zsh) source ~/.zshrc ;;
+        */bash) source ~/.bash_profile ;;
+        *) log "Warning: Unrecognized shell, you may need to restart your terminal" ;;
+    esac
 fi
 
 # Set up project directory
 DEFAULT_DIR="$HOME/github/my_repos/ml_projects"
 PROJECT_DIR="${1:-$DEFAULT_DIR}"
 
-# Validate and create project directory
+# Safely create project directory
 if [ ! -d "$PROJECT_DIR" ]; then
     log "Creating project directory: $PROJECT_DIR"
     mkdir -p "$PROJECT_DIR"
+else
+    log "✓ Project directory already exists"
 fi
 
 cd "$PROJECT_DIR"
-log "🚀 Starting ML environment setup in: $PROJECT_DIR"
+log "🚀 Working in: $PROJECT_DIR"
 
 # Create and activate Conda environment
-log "🔨 Creating Conda environment..."
-conda create -n ml_env python=3.10 -y
-conda activate ml_env
+if ! check_env; then
+    log "🔨 Creating Conda environment..."
+    conda create -n ml_env python=3.10 -y
+else
+    log "✓ ML environment already exists"
+fi
 
-# Install ML packages optimized for Apple Silicon
-log "📚 Installing ML packages..."
-conda install -y -c conda-forge \
-    # Fundamental numerical computing library for scientific computing
-    numpy \
-    # Data manipulation and analysis library
-    pandas \
-    # Machine learning algorithms and tools
-    scikit-learn \
-    # Comprehensive plotting and visualization library
-    matplotlib \
-    # Statistical data visualization built on matplotlib
-    seaborn \
-    # Interactive computing and notebook creation
-    jupyter \
-    # Natural Language Toolkit for text processing
-    nltk \
-    # Industrial-strength Natural Language Processing
-    spacy \
-    # State-of-the-art Natural Language Processing models
-    transformers \
-    # Testing framework for Python
-    pytest \
-    # Python code formatter
-    black \
-    # Python code analysis tool
-    pylint
+# Ensure we can activate the environment
+eval "$(conda shell.bash hook)"
+conda activate ml_env || { log "❌ Failed to activate environment. Please restart your terminal and try again."; exit 1; }
 
-# Install PyTorch with MPS support
-log "🔥 Installing PyTorch with Metal support..."
-# Deep learning framework with Apple Metal support
-conda install -y -c pytorch pytorch torchvision
+# Install packages only if not present
+log "📚 Checking and installing ML packages..."
+PACKAGES=(
+    "numpy:Fundamental numerical computing library"
+    "pandas:Data manipulation and analysis library"
+    "scikit-learn:Machine learning algorithms and tools"
+    "matplotlib:Comprehensive plotting and visualization"
+    "seaborn:Statistical data visualization"
+    "jupyter:Interactive computing and notebooks"
+    "nltk:Natural Language Toolkit"
+    "spacy:Industrial-strength NLP"
+    "transformers:State-of-the-art NLP models"
+    "pytest:Testing framework"
+    "black:Code formatter"
+    "pylint:Code analysis tool"
+)
 
-# Install TensorFlow with Metal support
-log "📱 Installing TensorFlow with Metal support..."
-# TensorFlow dependencies optimized for Apple Silicon
-conda install -y -c apple tensorflow-deps
-# TensorFlow core with Metal support for GPU acceleration
-pip install tensorflow-macos tensorflow-metal
+for package_info in "${PACKAGES[@]}"; do
+    package=${package_info%%:*}
+    description=${package_info#*:}
+    if ! check_package "$package"; then
+        log "Installing $package ($description)"
+        conda install -y -c conda-forge "$package"
+    else
+        log "✓ $package already installed"
+    fi
+done
 
-# Download common ML resources
-log "📥 Downloading additional resources..."
+# Install PyTorch with MPS support if not present
+if ! check_package "pytorch"; then
+    log "🔥 Installing PyTorch with Metal support..."
+    conda install -y -c pytorch pytorch torchvision
+else
+    log "✓ PyTorch already installed"
+fi
+
+# Install TensorFlow with Metal support if not present
+if ! check_package "tensorflow-deps"; then
+    log "📱 Installing TensorFlow with Metal support..."
+    conda install -y -c apple tensorflow-deps
+    pip install --upgrade tensorflow-macos tensorflow-metal
+else
+    log "✓ TensorFlow already installed"
+fi
+
+# Safely download ML resources
+log "📥 Checking and downloading ML resources..."
 python3 -c "
-import nltk
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-import spacy
-spacy.cli.download('en_core_web_sm')
+import nltk, spacy
+nltk_data = nltk.data.path[0]
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    nltk.download('averaged_perceptron_tagger')
+try:
+    spacy.load('en_core_web_sm')
+except OSError:
+    spacy.cli.download('en_core_web_sm')
 "
 
-# Create common project directories
-log "📁 Creating project structure..."
-mkdir -p "$PROJECT_DIR"/{data,models,notebooks,src,tests,docs}
-touch "$PROJECT_DIR"/{README.md,requirements.txt,.gitignore}
+# Safely create project structure
+log "📁 Ensuring project structure exists..."
+for dir in data models notebooks src tests docs; do
+    if [ ! -d "$PROJECT_DIR/$dir" ]; then
+        mkdir -p "$PROJECT_DIR/$dir"
+        touch "$PROJECT_DIR/$dir/.gitkeep"
+    fi
+done
 
-# Add basic .gitignore
-echo """
+for file in README.md requirements.txt .gitignore; do
+    if [ ! -f "$PROJECT_DIR/$file" ]; then
+        touch "$PROJECT_DIR/$file"
+    fi
+done
+
+# Add basic .gitignore only if it's empty
+if [ ! -s "$PROJECT_DIR/.gitignore" ]; then
+    log "Adding .gitignore template..."
+    echo """
 # Python
 __pycache__/
 *.py[cod]
@@ -188,12 +252,16 @@ data/*
 models/*
 !models/.gitkeep
 """ > "$PROJECT_DIR/.gitignore"
+fi
 
-# Generate environment file
-log "📝 Generating environment file..."
-conda env export > environment.yml
+# Generate environment file with timestamp
+log "📝 Updating environment file..."
+conda env export > "environment_$(date +%Y%m%d).yml"
+if [ -f environment.yml ]; then
+    mv "environment_$(date +%Y%m%d).yml" environment.yml
+fi
 
-# Cleanup
+# Safe cleanup
 log "🧹 Cleaning up..."
 conda clean --all -y
 
