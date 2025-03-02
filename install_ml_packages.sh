@@ -91,12 +91,35 @@ fi
 if ! grep -q "conda initialize" ~/.bash_profile ~/.zshrc 2>/dev/null; then
     log "Initializing conda..."
     conda init "$(basename "$SHELL")"
-    # Source the shell configuration
+    
+    # Source the configuration based on shell type
     case "$SHELL" in
-        */zsh) source ~/.zshrc ;;
-        */bash) source ~/.bash_profile ;;
-        *) log "Warning: Unrecognized shell, you may need to restart your terminal" ;;
+        */zsh)
+            source ~/.zshrc
+            # Re-initialize conda for the current session
+            source "$HOME/miniforge3/etc/profile.d/conda.sh"
+            ;;
+        */bash)
+            source ~/.bash_profile
+            # Re-initialize conda for the current session
+            source "$HOME/miniforge3/etc/profile.d/conda.sh"
+            ;;
+        *)
+            log "Warning: Unrecognized shell, manual restart may be needed"
+            source "$HOME/miniforge3/etc/profile.d/conda.sh"
+            ;;
     esac
+    
+    # Verify conda is working
+    if ! command -v conda &>/dev/null; then
+        log "❌ Conda initialization failed. Please run these commands manually:"
+        echo "1. Close this terminal"
+        echo "2. Open a new terminal"
+        echo "3. Run this script again"
+        exit 1
+    fi
+    
+    log "✓ Conda initialized successfully"
 fi
 
 # Set up project directory

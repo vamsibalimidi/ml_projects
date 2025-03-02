@@ -94,6 +94,27 @@ done
 # Start uninstallation
 log "🗑️ Starting uninstallation process..."
 
+# Get project directory
+DEFAULT_DIR="$HOME/github/my_repos/ml_projects"
+PROJECT_DIR="${1:-$DEFAULT_DIR}"
+
+# Clean up project structure
+if [ -d "$PROJECT_DIR" ] && confirm "Remove project structure (data, models, etc)?"; then
+    log "Removing project structure..."
+    # Remove directories
+    for dir in data models notebooks src tests docs; do
+        rm -rf "$PROJECT_DIR/$dir"
+    done
+    
+    # Remove specific files
+    for file in README.md requirements.txt .gitignore environment.yml; do
+        rm -f "$PROJECT_DIR/$file"
+    done
+    
+    # Remove any environment files with timestamps
+    rm -f "$PROJECT_DIR/environment_*.yml"
+fi
+
 # Check if conda exists
 if command -v conda &> /dev/null; then
     if [ "$REMOVE_ALL" = true ]; then
@@ -129,10 +150,11 @@ log """
 Removed items:
 $([ "$REMOVE_ALL" = true ] && echo "- Complete conda installation")
 $([ "$REMOVE_ALL" = false ] && echo "- ML environment (if existed)")
+- Project structure (if confirmed)
 - NLTK data (if existed)
 - spaCy models (if existed)
 
-Project directory preserved at: $HOME/github/my_repos/ml_projects
+Project directory location: $PROJECT_DIR
 
 ⚠️  Please restart your terminal for all changes to take effect
 """
