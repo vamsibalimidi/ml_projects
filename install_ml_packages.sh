@@ -143,14 +143,26 @@ fi
 eval "$(conda shell.bash hook)"
 conda activate ml_env || { log "❌ Failed to activate environment. Please restart your terminal and try again."; exit 1; }
 
-# Install packages only if not present
-log "📚 Checking and installing ML packages..."
+# Package descriptions:
+# numpy        - Essential package for scientific computing with Python. Provides support for large, multi-dimensional arrays and matrices
+# pandas       - Powerful data manipulation library. Provides DataFrames for efficient data analysis and handling
+# scikit-learn - Comprehensive machine learning library. Includes various classical ML algorithms and tools
+# matplotlib   - Standard plotting library. Creates publication-quality figures and visualizations
+# seaborn      - Statistical visualization library built on matplotlib. Provides enhanced styling and complex statistical plots
+# jupyter      - Interactive computing environment. Enables creation and sharing of documents containing live code
+# nltk         - Natural Language Toolkit. Comprehensive platform for building Python programs to work with human language data
+# spacy        - Industrial-strength NLP library. Provides efficient tools for advanced natural language processing
+# transformers - State-of-the-art NLP library by Hugging Face. Provides access to pretrained models like BERT, GPT
+# pytest       - Testing framework. Makes it easy to write simple and scalable test cases
+# black        - Uncompromising code formatter. Maintains consistent Python code style
+# pylint       - Static code analyzer. Helps identify programming errors, coding standard violations
+
 PACKAGES=(
     "numpy:Fundamental numerical computing library"
     "pandas:Data manipulation and analysis library"
     "scikit-learn:Machine learning algorithms and tools"
     "matplotlib:Comprehensive plotting and visualization"
-    "seaborn:Statistical data visualization"
+    "seaborn:Statistical visualization library"
     "jupyter:Interactive computing and notebooks"
     "nltk:Natural Language Toolkit"
     "spacy:Industrial-strength NLP"
@@ -160,6 +172,7 @@ PACKAGES=(
     "pylint:Code analysis tool"
 )
 
+log "📚 Checking and installing ML packages..."
 for package_info in "${PACKAGES[@]}"; do
     package=${package_info%%:*}
     description=${package_info#*:}
