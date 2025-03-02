@@ -172,23 +172,39 @@ else
 fi
 
 # Safely download ML resources
-log "📥 Checking and downloading ML resources..."
-python3 -c "
-import nltk, spacy
-nltk_data = nltk.data.path[0]
+log "📥 Installing and downloading ML resources..."
+
+# Ensure conda environment is activated
+eval "$(conda shell.bash hook)"
+conda activate ml_env
+
+# Install NLTK and SpaCy using both conda and pip to ensure installation
+log "Installing NLTK and SpaCy..."
+conda install -y -c conda-forge nltk spacy || {
+    log "Conda install failed, trying pip..."
+    pip install nltk spacy
+}
+
+# Download resources with error handling
+python3 -c '
 try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
+    import nltk
+    print("Installing NLTK resources...")
+    nltk.download("punkt")
+    nltk.download("averaged_perceptron_tagger")
+    print("NLTK resources installed successfully")
+except Exception as e:
+    print(f"Error installing NLTK resources: {e}")
+
 try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('averaged_perceptron_tagger')
-try:
-    spacy.load('en_core_web_sm')
-except OSError:
-    spacy.cli.download('en_core_web_sm')
-"
+    import spacy
+    print("Installing SpaCy resources...")
+    import subprocess
+    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+    print("SpaCy resources installed successfully")
+except Exception as e:
+    print(f"Error installing SpaCy resources: {e}")
+' || log "⚠️ Warning: Some resources may not have been installed properly"
 
 # Safely create project structure
 log "📁 Ensuring project structure exists..."
